@@ -17,9 +17,6 @@ management, and resource allocation automatically.
 ## Prerequisites
 * Windows Subsystem for Linux (WSL)
 * Visual Studio Code with Remote-SSH extension
-* OpenSSH client
-* tmux
-* unix2dos utility
 
 ## Installation
 1. Download the script:
@@ -60,7 +57,6 @@ This will:
 | `--partition=NAME` | Specify partition (teaching, dgx, dgxh100) |
 | `--gpus=N` | Number of GPUs |
 | `--cpus-per-task=N` | CPUs per task |
-| `--mem=SIZE` | Memory per node (e.g., 16G) |
 
 ## Interactive Usage
 * Press 'x' to exit allocation early
