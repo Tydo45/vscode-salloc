@@ -17,21 +17,19 @@ management, and resource allocation automatically.
 ## Prerequisites
 * Windows Subsystem for Linux (WSL)
 * Visual Studio Code with Remote-SSH extension
-* OpenSSH client
-* tmux
-* unix2dos utility
 
 ## Installation
-1. Download the script:
+1. Download the script (In WSL):
    ```bash
-   wget https://raw.githubusercontent.com/your-repo/vscode-salloc-autosetup-v2.sh
+   wget https://github.com/Tydo45/vscode-salloc/blob/main/vscode-salloc-autosetup-v2.sh
    chmod +x vscode-salloc-autosetup-v2.sh
    ```
 
 ## First-Time Setup
 Run the script with the --setup flag:
+```bash
     ./vscode-salloc-autosetup-v2.sh --setup
-
+```
 This will:
 1. Prompt for your ROSIE username
 2. Create/update SSH configuration
@@ -60,7 +58,6 @@ This will:
 | `--partition=NAME` | Specify partition (teaching, dgx, dgxh100) |
 | `--gpus=N` | Number of GPUs |
 | `--cpus-per-task=N` | CPUs per task |
-| `--mem=SIZE` | Memory per node (e.g., 16G) |
 
 ## Interactive Usage
 * Press 'x' to exit allocation early
