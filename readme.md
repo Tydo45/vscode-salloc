@@ -19,9 +19,9 @@ management, and resource allocation automatically.
 * Visual Studio Code with Remote-SSH extension
 
 ## Installation
-1. Download the script:
+1. Download the script (In WSL):
    ```bash
-   wget https://raw.githubusercontent.com/your-repo/vscode-salloc-autosetup-v2.sh
+   wget https://github.com/Tydo45/vscode-salloc/blob/main/vscode-salloc-autosetup-v2.sh
    chmod +x vscode-salloc-autosetup-v2.sh
    ```
 
