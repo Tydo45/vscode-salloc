@@ -27,8 +27,9 @@ management, and resource allocation automatically.
 
 ## First-Time Setup
 Run the script with the --setup flag:
+```bash
     ./vscode-salloc-autosetup-v2.sh --setup
-
+```
 This will:
 1. Prompt for your ROSIE username
 2. Create/update SSH configuration
