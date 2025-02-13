@@ -160,6 +160,42 @@ For more information about SLURM options, see: man salloc (Run this when connect
 EOF
 }
 
+# Cleanup function to handle all cleanup operations
+cleanup_allocation() {
+    local exit_code=$?
+    local force=$1
+    # Static variable to prevent double cleanup
+    if [ "${CLEANUP_RUN:-0}" -eq 1 ]; then
+        return
+    fi
+    CLEANUP_RUN=1
+    
+    # Only run cleanup if forced or if we have an active node
+    if [ "$force" = "true" ] || [ -n "$NODE" ]; then
+        echo -e "\nRunning cleanup..."
+        
+        # Kill tmux session if it exists
+        ssh -q $REMOTE_SERVER "tmux kill-session -t $SESSION_NAME" 2>/dev/null || true
+        echo "Allocation cleaned up."
+        
+        # Restore terminal settings if they were modified
+        if [ -n "$SAVED_STTY" ]; then
+            stty "$SAVED_STTY" 2>/dev/null || true
+        fi
+    fi
+    
+    # Only exit if this was triggered by a trap
+    if [ "$force" = "true" ]; then
+        exit $exit_code
+    fi
+}
+
+# Trap various signals
+trap 'cleanup_allocation false' EXIT      # Normal exit
+trap 'cleanup_allocation true' SIGINT     # Ctrl+C
+trap 'cleanup_allocation true' SIGTERM    # Kill command
+trap 'cleanup_allocation true' SIGHUP     # Terminal closed
+
 if [[ "$@" =~ "--setup" || ! -f "$MARKER_FILE" ]]; then
     read -rp "Enter your Rosie SSH username: " ROSIE_USER
     setup_ssh_config
@@ -203,10 +239,9 @@ if [ -n "$NODE" ]; then
         printf "\rTime remaining: $(date -u -d @$TIME_IN_SECONDS +%H:%M:%S) [$BAR] $PERCENT%% "
         keypress="`cat -v`"
     done
-    if [ -t 0 ]; then stty "$SAVED_STTY"; fi
-    echo -e "\nAllocation exited and cleaned up. Goodbye!"
+    cleanup_allocation true
 else
     echo "Error: Could not retrieve or validate allocated node."
     echo "This could be due to a failed ssh connection or unavailable resources."
+    cleanup_allocation true
 fi
-ssh -q $REMOTE_SERVER "tmux kill-session -t $SESSION_NAME"
