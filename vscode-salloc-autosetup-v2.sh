@@ -8,7 +8,46 @@ ID_FILE_PATH="C:\\Users\\$WIN_USER\\.ssh\\id_ed25519"
 SSH_CONFIG="$WIN_HOME/.ssh/config"
 MARKER_FILE="$HOME/.vscode_salloc_initialized"
 
+# Force cleanup of all sessions and allocations
+cleanup_force() {
+    echo "Cleaning up all sessions..."
+    if check_ssh_connection; then
+        ssh -q $REMOTE_SERVER "tmux list-sessions 2>/dev/null | grep $SESSION_NAME | cut -d: -f1 | xargs -I{} tmux kill-session -t {}"
+        if [ -n "$ROSIE_USER" ]; then
+            ssh -q $REMOTE_SERVER "squeue -h -u $ROSIE_USER -o %A | xargs -r scancel"
+        fi
+        echo "Cleanup complete."
+    else
+        echo "Could not connect to remote server for cleanup."
+    fi
+}
+
+# Check SSH connection to remote server
+check_ssh_connection() {
+    if ! ssh -q -o BatchMode=yes -o ConnectTimeout=5 "$REMOTE_SERVER" exit 2>/dev/null; then
+        echo "Error: Cannot connect to $REMOTE_SERVER"
+        echo "Please check your network connection and try again."
+        return 1
+    fi
+    return 0
+}
+
+# Validate SSH configuration
+validate_config() {
+    if [ ! -r "$SSH_CONFIG" ] || ! grep -q "Host Rosie" "$SSH_CONFIG"; then
+        echo "Error: SSH configuration is invalid or missing."
+        echo "Please run --setup again."
+        return 1
+    fi
+    return 0
+}
+
 setup_ssh_config() {
+    # Validate SSH connection before proceeding
+    if ! check_ssh_connection; then
+        exit 1
+    fi
+
     # Handle existing config directory
     if [ -d "$SSH_CONFIG" ]; then
         echo "Warning: Found a directory at $SSH_CONFIG"
@@ -107,12 +146,26 @@ parse_time() {
 }
 
 allocate_node() {
+    # Validate SSH connection before allocation
+    if ! check_ssh_connection; then
+        return ""
+    fi
+
     NODE=$(ssh -q $REMOTE_SERVER "
         tmux new-session -d -s $SESSION_NAME \"salloc $@\";
         sleep 5;
         tmux capture-pane -p -t $SESSION_NAME" | 
         grep -oP 'Nodes\s*=?\s*\K(dh-node[0-9]+|dh-dgx[0-9]+-[0-9]+|dh-dgxh100-[0-9]+)')
     [[ "$NODE" =~ ^dh-(node[0-9]+|dgx[0-9]+-[0-9]+|dgxh100-[0-9]+)$ ]] && echo "$NODE" || echo ""
+}
+
+# Enhanced progress display with end time
+show_progress() {
+    local end_time=$(date -d "@$(($(date +%s) + TIME_IN_SECONDS))" '+%H:%M:%S')
+    local remaining="$(date -u -d @$TIME_IN_SECONDS +%H:%M:%S)"
+    local filled=$((PERCENT / 5))
+    local bar=$(printf "%0.s█" $(seq 1 $filled))$(printf "%0.s-" $(seq 1 $((20 - filled))))
+    printf "\rTime remaining: %s [%s] %d%% (Ends at: %s)" "$remaining" "$bar" "$PERCENT" "$end_time"
 }
 
 print_info() {
@@ -131,6 +184,7 @@ Usage:
 Options:
     --setup          Run first-time setup or reconfigure
     --info           Display this help message
+    --cleanup        Force cleanup of hanging sessions and allocations
     --time=          Specify allocation time (formats: HH:MM:SS or D-HH:MM:SS)
     --partition=     Specify Partition (Supports: Teaching, dgx, dgxh100)
     --gpus=          Specify Number of GPUs for Allocation
@@ -196,7 +250,11 @@ trap 'cleanup_allocation true' SIGINT     # Ctrl+C
 trap 'cleanup_allocation true' SIGTERM    # Kill command
 trap 'cleanup_allocation true' SIGHUP     # Terminal closed
 
-if [[ "$@" =~ "--setup" || ! -f "$MARKER_FILE" ]]; then
+# Main script execution
+if [[ "$1" == "--cleanup" ]]; then
+    cleanup_force
+    exit 0
+elif [[ "$@" =~ "--setup" || ! -f "$MARKER_FILE" ]]; then
     read -rp "Enter your Rosie SSH username: " ROSIE_USER
     setup_ssh_config
     echo "Setup complete. SSH config updated at $SSH_CONFIG"
@@ -209,6 +267,11 @@ elif [[ "$1" == "--info" ]]; then
 fi
 
 source "$MARKER_FILE"
+# Validate configuration before proceeding
+if ! validate_config; then
+    exit 1
+fi
+
 # Check if SSH key has been copied and notify user if it hasn't
 if [ "$SSH_KEY_COPIED" != "true" ]; then
     echo "WARNING: SSH key has not been copied to the remote server."
@@ -234,9 +297,7 @@ if [ -n "$NODE" ]; then
         ((TIME_IN_SECONDS--))
         ((ELAPSED++))
         PERCENT=$(( (ELAPSED * 100) / (ELAPSED + TIME_IN_SECONDS) ))
-        FILLED=$((PERCENT / 5))
-        BAR=$(printf "%0.s█" $(seq 1 $FILLED))$(printf "%0.s-" $(seq 1 $((20 - FILLED))))
-        printf "\rTime remaining: $(date -u -d @$TIME_IN_SECONDS +%H:%M:%S) [$BAR] $PERCENT%% "
+        show_progress
         keypress="`cat -v`"
     done
     cleanup_allocation true
