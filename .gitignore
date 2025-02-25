@@ -11,3 +11,6 @@ Thumbs.db
 
 # Temporary bash script created during execution
 temp_run.sh 
+
+# Shortcut for easy Use
+*.lnk
