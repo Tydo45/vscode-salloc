@@ -40,8 +40,8 @@ If you want to use both the GUI and command-line interface:
 
 1. Create a folder on your Windows system (e.g., `C:\Tools\vscode-salloc`)
 2. Download both files to this folder:
-   - [vscode-salloc-autosetup-v2.sh](https://raw.githubusercontent.com/Tydo45/vscode-salloc/main/vscode-salloc-autosetup-v2.sh)
-   - [salloc_gui.ps1](https://raw.githubusercontent.com/Tydo45/vscode-salloc/main/salloc_gui.ps1)
+   - [vscode-salloc-autosetup-v2.sh](https://github.com/Tydo45/vscode-salloc/raw/main/vscode-salloc-autosetup-v2.sh)
+   - [salloc_gui.ps1](https://github.com/Tydo45/vscode-salloc/raw/main/salloc_gui.ps1)
 3. Open WSL and ensure the script is executable:
    ```bash
    cd /mnt/c/Tools/vscode-salloc  # Adjust path to match your folder
