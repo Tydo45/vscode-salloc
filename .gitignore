@@ -1,0 +1,13 @@
+# ROSIE Resource Allocator configuration files
+configurations.json
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# PowerShell temporary files
+*.tmp
+*~
+
+# Temporary bash script created during execution
+temp_run.sh 
