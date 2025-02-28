@@ -27,6 +27,7 @@ check_ssh_connection() {
     if ! ssh -q -o BatchMode=yes -o ConnectTimeout=5 "$REMOTE_SERVER" exit 2>/dev/null; then
         echo "Error: Cannot connect to $REMOTE_SERVER"
         echo "Please check your network connection and try again."
+        CONNECTION_FAILED=true
         return 1
     fi
     return 0
@@ -134,7 +135,7 @@ Host dh-node* dh-dgx* dh-dgxh100*
 
 parse_time() {
     local time_arg=$(echo "$@" | grep -o '\--time=[0-9:.-]*')
-    [ -z "$time_arg" ] && echo "3600" && return
+    [ -z "$time_arg" ] && echo "3600" && return 0
     local parts=(${time_arg#--time=})
     if [[ $parts =~ ^([0-9]+)-([0-9]+):([0-9]+):([0-9]+)$ ]]; then
         echo $((${BASH_REMATCH[1]}*86400 + ${BASH_REMATCH[2]}*3600 + ${BASH_REMATCH[3]}*60 + ${BASH_REMATCH[4]}))
@@ -148,15 +149,24 @@ parse_time() {
 allocate_node() {
     # Validate SSH connection before allocation
     if ! check_ssh_connection; then
-        return ""
+        # Connection failed flag is set in check_ssh_connection
+        # Just return empty to indicate failure
+        return 1
     fi
 
+    # Only attempt to allocate if SSH connection is successful
     NODE=$(ssh -q $REMOTE_SERVER "
         tmux new-session -d -s $SESSION_NAME \"salloc $@\";
         sleep 5;
         tmux capture-pane -p -t $SESSION_NAME" | 
         grep -oP 'Nodes\s*=?\s*\K(dh-node[0-9]+|dh-dgx[0-9]+-[0-9]+|dh-dgxh100-[0-9]+)')
-    [[ "$NODE" =~ ^dh-(node[0-9]+|dgx[0-9]+-[0-9]+|dgxh100-[0-9]+)$ ]] && echo "$NODE" || echo ""
+    
+    # Strict validation of node name - must be exactly one of the three patterns
+    if [[ "$NODE" =~ ^dh-node[0-9]+$ || "$NODE" =~ ^dh-dgx[0-9]+-[0-9]+$ || "$NODE" =~ ^dh-dgxh100-[0-9]+$ ]]; then
+        echo "$NODE"
+    else
+        echo ""
+    fi
 }
 
 # Enhanced progress display with end time
@@ -220,7 +230,7 @@ cleanup_allocation() {
     local force=$1
     # Static variable to prevent double cleanup
     if [ "${CLEANUP_RUN:-0}" -eq 1 ]; then
-        return
+        return 0
     fi
     CLEANUP_RUN=1
     
@@ -279,10 +289,20 @@ if [ "$SSH_KEY_COPIED" != "true" ]; then
     echo "    $0 --setup"
 fi
 
-TIME_IN_SECONDS=$(parse_time "$@")
-NODE=$(allocate_node "$@")
+# Initialize connection failure flag
+CONNECTION_FAILED=false
 
-if [ -n "$NODE" ]; then
+TIME_IN_SECONDS=$(parse_time "$@")
+# Capture the allocated node and handle errors
+NODE=$(allocate_node "$@" 2>/dev/null)
+
+# Extra validation to ensure NODE is exactly a valid node name and nothing else
+if [[ ! "$NODE" =~ ^dh-node[0-9]+$ && ! "$NODE" =~ ^dh-dgx[0-9]+-[0-9]+$ && ! "$NODE" =~ ^dh-dgxh100-[0-9]+$ ]]; then
+    NODE=""
+fi
+
+# Only proceed if we have a valid node AND no connection failure occurred
+if [ -n "$NODE" ] && [ "$CONNECTION_FAILED" = "false" ]; then
     echo "Allocated Node: $NODE"
     code --new-window --remote "ssh-remote+$NODE" 2>/dev/null
     echo "Press 'x' to Exit Allocation and Cleanup"
@@ -291,6 +311,7 @@ if [ -n "$NODE" ]; then
         stty -echo -icanon -icrnl time 0 min 0
     fi
     keypress=''
+    ELAPSED=0
     
     while [ "x$keypress" = "x" ] && [ $TIME_IN_SECONDS -gt 0 ]; do
         sleep 1
@@ -302,7 +323,13 @@ if [ -n "$NODE" ]; then
     done
     cleanup_allocation true
 else
-    echo "Error: Could not retrieve or validate allocated node."
-    echo "This could be due to a failed ssh connection or unavailable resources."
+    if [ "$CONNECTION_FAILED" = "true" ]; then
+        echo "Failed to allocate a node due to connection failure."
+        echo "Please check your network connection and try again."
+    else
+        echo "Failed to allocate a node. No valid node name was returned."
+        echo "This may be due to resource unavailability or SLURM configuration."
+    fi
     cleanup_allocation true
+    exit 1
 fi
