@@ -417,7 +417,22 @@ $runButton.Add_Click({
 #!/bin/bash
 script_path=`$(wslpath -u "$bashScript")
 chmod +x "`$script_path"
+echo "Running ROSIE allocation script..."
 "`$script_path" --time="$time" --partition="$partition" --gpus="$gpus" --cpus-per-task="$cpus"
+exit_code=`$?
+if [ `$exit_code -ne 0 ]; then
+    echo ""
+    echo "==================================================="
+    echo "ERROR: The script failed with exit code `$exit_code"
+    echo "Press Enter to close this window..."
+    echo "==================================================="
+    read -p ""
+else
+    echo ""
+    echo "Script completed successfully!"
+    echo "This window will close in 3 seconds..."
+    sleep 3
+fi
 rm "`$(wslpath -u "$tempScript")" 2>/dev/null
 "@
         # Write the script with Unix line endings
